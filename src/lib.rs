@@ -1,4 +1,5 @@
 #![warn(missing_docs)]
+#![feature(const_type_id)]
 
 //! This crate provides an [Egui](https://github.com/emilk/egui) integration for the [Bevy](https://github.com/bevyengine/bevy) game engine.
 //!
@@ -802,9 +803,9 @@ fn free_egui_textures_system(
         }
     }
 
-    for image_event in image_events.iter() {
-        if let AssetEvent::Removed { handle } = image_event {
-            egui_user_textures.remove_image(handle);
+    for image_event in image_events.read() {
+        if let AssetEvent::Removed { id } = image_event {
+            egui_user_textures.remove_image(&Handle::Weak(id.clone()));
         }
     }
 }
@@ -822,7 +823,10 @@ mod tests {
     use super::*;
     use bevy::{
         app::PluginGroup,
-        render::{settings::WgpuSettings, RenderPlugin},
+        render::{
+            settings::{RenderCreation, WgpuSettings},
+            RenderPlugin,
+        },
         winit::WinitPlugin,
         DefaultPlugins,
     };
@@ -838,10 +842,10 @@ mod tests {
             .add_plugins(
                 DefaultPlugins
                     .set(RenderPlugin {
-                        wgpu_settings: WgpuSettings {
+                        render_creation: RenderCreation::Automatic(WgpuSettings {
                             backends: None,
                             ..Default::default()
-                        },
+                        }),
                     })
                     .build()
                     .disable::<WinitPlugin>(),

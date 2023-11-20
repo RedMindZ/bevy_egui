@@ -1,3 +1,5 @@
+use std::any::TypeId;
+
 use crate::{
     render_systems::{
         EguiPipelines, EguiTextureBindGroups, EguiTextureId, EguiTransform, EguiTransforms,
@@ -7,8 +9,7 @@ use crate::{
 use bevy::{
     core::cast_slice,
     ecs::world::{FromWorld, World},
-    prelude::{Entity, HandleUntyped, Resource},
-    reflect::TypeUuid,
+    prelude::{Entity, Resource, UntypedHandle},
     render::{
         render_graph::{Node, NodeRunError, RenderGraphContext},
         render_resource::{
@@ -24,12 +25,15 @@ use bevy::{
         renderer::{RenderContext, RenderDevice, RenderQueue},
         texture::{Image, ImageSampler},
         view::ExtractedWindows,
-    },
+    }, utils::Uuid,
 };
 
 /// Egui shader.
-pub const EGUI_SHADER_HANDLE: HandleUntyped =
-    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 9898276442290979394);
+pub const EGUI_SHADER_HANDLE: UntypedHandle =
+    UntypedHandle::Weak(bevy::asset::UntypedAssetId::Uuid {
+        type_id: TypeId::of::<Shader>(),
+        uuid: Uuid::from_u128(9898276442290979394),
+    });
 
 /// Egui render pipeline.
 #[derive(Resource)]
