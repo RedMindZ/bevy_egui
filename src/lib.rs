@@ -824,7 +824,7 @@ mod tests {
     use bevy::{
         app::PluginGroup,
         render::{
-            settings::{RenderCreation, WgpuSettings},
+            settings::WgpuSettings,
             RenderPlugin,
         },
         winit::WinitPlugin,

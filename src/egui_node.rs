@@ -1,5 +1,3 @@
-use std::any::TypeId;
-
 use crate::{
     render_systems::{
         EguiPipelines, EguiTextureBindGroups, EguiTextureId, EguiTransform, EguiTransforms,
@@ -25,7 +23,7 @@ use bevy::{
         renderer::{RenderContext, RenderDevice, RenderQueue},
         texture::{Image, ImageSampler},
         view::ExtractedWindows,
-    }, utils::Uuid,
+    },
 };
 
 /// Egui shader.
