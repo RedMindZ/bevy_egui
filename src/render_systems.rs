@@ -10,9 +10,8 @@ use bevy::{
         render_asset::RenderAssets,
         render_graph::RenderGraph,
         render_resource::{
-            BindGroup, BindGroupDescriptor, BindGroupEntry, BindingResource, BufferId,
-            CachedRenderPipelineId, DynamicUniformBuffer, PipelineCache, ShaderType,
-            SpecializedRenderPipelines,
+            BindGroup, BindGroupEntry, BindingResource, BufferId, CachedRenderPipelineId,
+            DynamicUniformBuffer, PipelineCache, ShaderType, SpecializedRenderPipelines,
         },
         renderer::{RenderDevice, RenderQueue},
         texture::Image,
@@ -156,14 +155,14 @@ pub fn prepare_egui_transforms_system(
         match egui_transforms.bind_group {
             Some((id, _)) if buffer.id() == id => {}
             _ => {
-                let transform_bind_group = render_device.create_bind_group(&BindGroupDescriptor {
-                    label: Some("egui transform bind group"),
-                    layout: &egui_pipeline.transform_bind_group_layout,
-                    entries: &[BindGroupEntry {
+                let transform_bind_group = render_device.create_bind_group(
+                    Some("egui transform bind group"),
+                    &egui_pipeline.transform_bind_group_layout,
+                    &[BindGroupEntry {
                         binding: 0,
                         resource: egui_transforms.buffer.binding().unwrap(),
                     }],
-                });
+                );
                 egui_transforms.bind_group = Some((buffer.id(), transform_bind_group));
             }
         };
@@ -186,10 +185,10 @@ pub fn queue_bind_groups_system(
         .handles()
         .filter_map(|(texture, handle_id)| {
             let gpu_image = gpu_images.get(&Handle::Weak(handle_id))?;
-            let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
-                label: None,
-                layout: &egui_pipeline.texture_bind_group_layout,
-                entries: &[
+            let bind_group = render_device.create_bind_group(
+                None,
+                &egui_pipeline.texture_bind_group_layout,
+                &[
                     BindGroupEntry {
                         binding: 0,
                         resource: BindingResource::TextureView(&gpu_image.texture_view),
@@ -199,7 +198,7 @@ pub fn queue_bind_groups_system(
                         resource: BindingResource::Sampler(&gpu_image.sampler),
                     },
                 ],
-            });
+            );
             Some((texture, bind_group))
         })
         .collect();
@@ -223,7 +222,7 @@ pub fn queue_pipelines_system(
         .iter()
         .filter_map(|(window_id, window)| {
             let key = EguiPipelineKey {
-                texture_format: window.swap_chain_texture_format?,
+                texture_format: window.swap_chain_texture_format?.add_srgb_suffix(),
             };
             let pipeline_id = pipelines.specialize(&pipeline_cache, &egui_pipeline, key);
 

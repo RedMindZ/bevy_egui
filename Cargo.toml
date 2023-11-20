@@ -1,6 +1,6 @@
 [package]
 name = "bevy_egui"
-version = "0.22.0"
+version = "0.23.0"
 authors = ["mvlabat <mvlabat@gmail.com>"]
 description = "A plugin for Egui integration into Bevy"
 license = "MIT"
@@ -41,8 +41,4 @@ bevy = { path = "../bevy", default-features = false, features = [
     "png",
     "bevy_pbr",
     "bevy_core_pipeline",
-    # TODO: remove the following features after https://github.com/bevyengine/bevy/pull/9073 is released:
-    "ktx2",
-    "tonemapping_luts",
-    "zstd",
 ] }
