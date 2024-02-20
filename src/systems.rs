@@ -9,10 +9,10 @@ use bevy::{
         system::{Local, Res, ResMut, SystemParam},
     },
     input::{
-        keyboard::{KeyCode, KeyboardInput},
+        keyboard::{Key, KeyCode, KeyboardInput},
         mouse::{MouseButton, MouseButtonInput, MouseScrollUnit, MouseWheel},
         touch::TouchInput,
-        ButtonState, Input,
+        ButtonState,
     },
     prelude::{Entity, EventReader, Query, Resource, Time},
     time::Real,
@@ -25,6 +25,7 @@ use std::marker::PhantomData;
 
 #[allow(missing_docs)]
 #[derive(SystemParam)]
+// IMPORTANT: remember to add the logic to clear event readers to the `clear` method.
 pub struct InputEvents<'w, 's> {
     pub ev_cursor_entered: EventReader<'w, 's, CursorEntered>,
     pub ev_cursor_left: EventReader<'w, 's, CursorLeft>,
@@ -41,7 +42,6 @@ pub struct InputEvents<'w, 's> {
 impl<'w, 's> InputEvents<'w, 's> {
     /// Consumes all the events.
     pub fn clear(&mut self) {
-        self.ev_touch.read().last();
         self.ev_cursor_entered.read().last();
         self.ev_cursor_left.read().last();
         self.ev_cursor.read().last();
@@ -51,6 +51,7 @@ impl<'w, 's> InputEvents<'w, 's> {
         self.ev_keyboard_input.read().last();
         self.ev_window_focused.read().last();
         self.ev_window_created.read().last();
+        self.ev_touch.read().last();
     }
 }
 
@@ -58,14 +59,24 @@ impl<'w, 's> InputEvents<'w, 's> {
 #[derive(Resource, Default)]
 pub struct TouchId(pub Option<u64>);
 
+/// Stores "pressed" state of modifier keys.
+/// Will be removed if Bevy adds support for `ButtonInput<Key>` (logical keys).
+#[derive(Resource, Default, Clone, Copy, Debug)]
+pub struct ModifierKeysState {
+    shift: bool,
+    ctrl: bool,
+    alt: bool,
+    win: bool,
+}
+
 #[allow(missing_docs)]
 #[derive(SystemParam)]
 pub struct InputResources<'w, 's> {
-    #[cfg(feature = "manage_clipboard")]
+    #[cfg(all(feature = "manage_clipboard", not(target_os = "android")))]
     pub egui_clipboard: Res<'w, crate::EguiClipboard>,
-    pub keyboard_input: Res<'w, Input<KeyCode>>,
+    pub modifier_keys_state: Local<'s, ModifierKeysState>,
     #[system_param(ignore)]
-    _marker: PhantomData<&'s ()>,
+    _marker: PhantomData<&'w ()>,
 }
 
 #[allow(missing_docs)]
@@ -74,6 +85,7 @@ pub struct ContextSystemParams<'w, 's> {
     pub focused_window: Local<'s, Option<Entity>>,
     pub pointer_touch_id: Local<'s, TouchId>,
     pub contexts: Query<'w, 's, EguiContextQuery>,
+    pub is_macos: Local<'s, bool>,
     #[system_param(ignore)]
     _marker: PhantomData<&'s ()>,
 }
@@ -81,12 +93,30 @@ pub struct ContextSystemParams<'w, 's> {
 /// Processes Bevy input and feeds it to Egui.
 pub fn process_input_system(
     mut input_events: InputEvents,
-    input_resources: InputResources,
+    mut input_resources: InputResources,
     mut context_params: ContextSystemParams,
     egui_settings: Res<EguiSettings>,
     mut egui_mouse_position: ResMut<EguiMousePosition>,
     time: Res<Time<Real>>,
 ) {
+    // Test whether it's macOS or OS X.
+    use std::sync::Once;
+    static START: Once = Once::new();
+    START.call_once(|| {
+        // The default for WASM is `false` since the `target_os` is `unknown`.
+        *context_params.is_macos = cfg!(target_os = "macos");
+
+        #[cfg(target_arch = "wasm32")]
+        if let Some(window) = web_sys::window() {
+            let nav = window.navigator();
+            if let Ok(user_agent) = nav.user_agent() {
+                if user_agent.to_ascii_lowercase().contains("Mac") {
+                    *context_params.is_macos = true;
+                }
+            }
+        }
+    });
+
     // This is a workaround for Windows. For some reason, `WindowFocused` event isn't fired
     // when a window is created.
     if let Some(event) = input_events.ev_window_created.read().last() {
@@ -101,23 +131,39 @@ pub fn process_input_system(
         };
     }
 
-    let shift = input_resources.keyboard_input.pressed(KeyCode::ShiftLeft)
-        || input_resources.keyboard_input.pressed(KeyCode::ShiftRight);
-    let ctrl = input_resources.keyboard_input.pressed(KeyCode::ControlLeft)
-        || input_resources
-            .keyboard_input
-            .pressed(KeyCode::ControlRight);
-    let alt = input_resources.keyboard_input.pressed(KeyCode::AltLeft)
-        || input_resources.keyboard_input.pressed(KeyCode::AltRight);
-    let win = input_resources.keyboard_input.pressed(KeyCode::SuperLeft)
-        || input_resources.keyboard_input.pressed(KeyCode::SuperRight);
+    let mut keyboard_input_events = Vec::new();
+    for event in input_events.ev_keyboard_input.read() {
+        // Copy the events as we might want to pass them to an Egui context later.
+        keyboard_input_events.push(event.clone());
 
-    let mac_cmd = if cfg!(target_os = "macos") {
-        win
-    } else {
-        false
-    };
-    let command = if cfg!(target_os = "macos") { win } else { ctrl };
+        let KeyboardInput {
+            logical_key, state, ..
+        } = event;
+        match logical_key {
+            Key::Shift => {
+                input_resources.modifier_keys_state.shift = state.is_pressed();
+            }
+            Key::Control => {
+                input_resources.modifier_keys_state.ctrl = state.is_pressed();
+            }
+            Key::Alt => {
+                input_resources.modifier_keys_state.alt = state.is_pressed();
+            }
+            Key::Super => {
+                input_resources.modifier_keys_state.win = state.is_pressed();
+            }
+            _ => {}
+        };
+    }
+
+    let ModifierKeysState {
+        shift,
+        ctrl,
+        alt,
+        win,
+    } = *input_resources.modifier_keys_state;
+    let mac_cmd = if *context_params.is_macos { win } else { false };
+    let command = if !*context_params.is_macos { win } else { ctrl };
 
     let modifiers = egui::Modifiers {
         alt,
@@ -153,7 +199,7 @@ pub fn process_input_system(
         // window this exact frame, so we are safe to ignore all `CursorMoved` events for the window
         // that has been left.
         if cursor_left_window != Some(cursor_moved.window) {
-            let scale_factor = egui_settings.scale_factor as f32;
+            let scale_factor = egui_settings.scale_factor;
             let mouse_position: (f32, f32) = (cursor_moved.position / scale_factor).into();
             let mut context = context_params
                 .contexts
@@ -220,9 +266,9 @@ pub fn process_input_system(
         }
     }
 
-    if !command || cfg!(target_os = "windows") && ctrl && alt {
+    if !command || !*context_params.is_macos && ctrl && alt {
         for event in input_events.ev_received_character.read() {
-            if !event.char.is_control() {
+            if event.char.matches(char::is_control).count() == 0 {
                 let mut context = context_params.contexts.get_mut(event.window).unwrap();
                 context
                     .egui_input
@@ -243,24 +289,24 @@ pub fn process_input_system(
             }
         })
     {
-        for ev in input_events.ev_keyboard_input.read() {
-            if let Some(key) = ev.key_code.and_then(bevy_to_egui_key) {
-                let pressed = match ev.state {
-                    ButtonState::Pressed => true,
-                    ButtonState::Released => false,
-                };
+        for ev in keyboard_input_events {
+            if let (Some(key), physical_key) = (
+                bevy_to_egui_key(&ev.logical_key),
+                bevy_to_egui_physical_key(&ev.key_code),
+            ) {
                 let egui_event = egui::Event::Key {
                     key,
-                    pressed,
+                    pressed: ev.state.is_pressed(),
                     repeat: false,
                     modifiers,
+                    physical_key,
                 };
                 focused_input.events.push(egui_event);
 
                 // We also check that it's an `ButtonState::Pressed` event, as we don't want to
                 // copy, cut or paste on the key release.
-                #[cfg(feature = "manage_clipboard")]
-                if command && pressed {
+                #[cfg(all(feature = "manage_clipboard", not(target_os = "android")))]
+                if command && ev.state.is_pressed() {
                     match key {
                         egui::Key::C => {
                             focused_input.events.push(egui::Event::Copy);
@@ -280,7 +326,7 @@ pub fn process_input_system(
         }
 
         for touch in input_events.ev_touch.read() {
-            let scale_factor = egui_settings.scale_factor as f32;
+            let scale_factor = egui_settings.scale_factor;
             let touch_position: (f32, f32) = (touch.position / scale_factor).into();
 
             // Emit touch event
@@ -359,7 +405,7 @@ pub fn process_input_system(
     }
 
     for mut context in context_params.contexts.iter_mut() {
-        context.egui_input.predicted_dt = time.delta_seconds();
+        context.egui_input.time = Some(time.elapsed_seconds_f64());
     }
 
     // In some cases, we may skip certain events. For example, we ignore `ReceivedCharacter` events
@@ -376,14 +422,14 @@ pub fn update_window_contexts_system(
         let new_window_size = WindowSize::new(
             context.window.physical_width() as f32,
             context.window.physical_height() as f32,
-            context.window.scale_factor() as f32,
+            context.window.scale_factor(),
         );
         let width = new_window_size.physical_width
             / new_window_size.scale_factor
-            / egui_settings.scale_factor as f32;
+            / egui_settings.scale_factor;
         let height = new_window_size.physical_height
             / new_window_size.scale_factor
-            / egui_settings.scale_factor as f32;
+            / egui_settings.scale_factor;
 
         if width < 1.0 || height < 1.0 {
             continue;
@@ -394,8 +440,10 @@ pub fn update_window_contexts_system(
             egui::pos2(width, height),
         ));
 
-        context.egui_input.pixels_per_point =
-            Some(new_window_size.scale_factor * egui_settings.scale_factor as f32);
+        context
+            .ctx
+            .0
+            .set_pixels_per_point(new_window_size.scale_factor * egui_settings.scale_factor);
 
         *context.window_size = new_window_size;
     }
@@ -414,7 +462,8 @@ pub fn process_output_system(
         EguiSettings,
     >,
     mut contexts: Query<EguiContextQuery>,
-    #[cfg(feature = "manage_clipboard")] mut egui_clipboard: ResMut<crate::EguiClipboard>,
+    #[cfg(all(feature = "manage_clipboard", not(target_os = "android")))]
+    mut egui_clipboard: ResMut<crate::EguiClipboard>,
     mut event: EventWriter<RequestRedraw>,
     #[cfg(windows)] mut last_cursor_icon: Local<bevy::utils::HashMap<Entity, egui::CursorIcon>>,
 ) {
@@ -425,16 +474,17 @@ pub fn process_output_system(
             platform_output,
             shapes,
             textures_delta,
-            repaint_after,
+            pixels_per_point,
+            viewport_output: _,
         } = full_output;
-        let paint_jobs = ctx.tessellate(shapes);
+        let paint_jobs = ctx.tessellate(shapes, pixels_per_point);
 
         context.render_output.paint_jobs = paint_jobs;
         context.render_output.textures_delta.append(textures_delta);
 
         context.egui_output.platform_output = platform_output.clone();
 
-        #[cfg(feature = "manage_clipboard")]
+        #[cfg(all(feature = "manage_clipboard", not(target_os = "android")))]
         if !platform_output.copied_text.is_empty() {
             egui_clipboard.set_contents(&platform_output.copied_text);
         }
@@ -455,8 +505,8 @@ pub fn process_output_system(
         #[cfg(not(windows))]
         set_icon();
 
-        if repaint_after.is_zero() {
-            event.send(RequestRedraw)
+        if ctx.has_requested_repaint() {
+            event.send(RequestRedraw);
         }
 
         #[cfg(feature = "open_url")]
@@ -483,7 +533,7 @@ pub fn process_output_system(
 fn egui_to_winit_cursor_icon(cursor_icon: egui::CursorIcon) -> Option<bevy::window::CursorIcon> {
     match cursor_icon {
         egui::CursorIcon::Default => Some(bevy::window::CursorIcon::Default),
-        egui::CursorIcon::PointingHand => Some(bevy::window::CursorIcon::Hand),
+        egui::CursorIcon::PointingHand => Some(bevy::window::CursorIcon::Pointer),
         egui::CursorIcon::ResizeHorizontal => Some(bevy::window::CursorIcon::EwResize),
         egui::CursorIcon::ResizeNeSw => Some(bevy::window::CursorIcon::NeswResize),
         egui::CursorIcon::ResizeNwSe => Some(bevy::window::CursorIcon::NwseResize),
@@ -520,60 +570,150 @@ fn egui_to_winit_cursor_icon(cursor_icon: egui::CursorIcon) -> Option<bevy::wind
     }
 }
 
-fn bevy_to_egui_key(key_code: KeyCode) -> Option<egui::Key> {
-    let key = match key_code {
-        KeyCode::Down => egui::Key::ArrowDown,
-        KeyCode::Left => egui::Key::ArrowLeft,
-        KeyCode::Right => egui::Key::ArrowRight,
-        KeyCode::Up => egui::Key::ArrowUp,
+/// Matches the implementation of <https://github.com/emilk/egui/blob/68b3ef7f6badfe893d3bbb1f791b481069d807d9/crates/egui-winit/src/lib.rs#L1005>.
+pub fn bevy_to_egui_key(key: &Key) -> Option<egui::Key> {
+    let key = match key {
+        Key::Character(str) => return egui::Key::from_name(str.as_str()),
+        Key::Unidentified(_) | Key::Dead(_) => return None,
+
+        Key::Enter => egui::Key::Enter,
+        Key::Tab => egui::Key::Tab,
+        Key::Space => egui::Key::Space,
+        Key::ArrowDown => egui::Key::ArrowDown,
+        Key::ArrowLeft => egui::Key::ArrowLeft,
+        Key::ArrowRight => egui::Key::ArrowRight,
+        Key::ArrowUp => egui::Key::ArrowUp,
+        Key::End => egui::Key::End,
+        Key::Home => egui::Key::Home,
+        Key::PageDown => egui::Key::PageDown,
+        Key::PageUp => egui::Key::PageUp,
+        Key::Backspace => egui::Key::Backspace,
+        Key::Delete => egui::Key::Delete,
+        Key::Insert => egui::Key::Insert,
+        Key::Escape => egui::Key::Escape,
+        Key::F1 => egui::Key::F1,
+        Key::F2 => egui::Key::F2,
+        Key::F3 => egui::Key::F3,
+        Key::F4 => egui::Key::F4,
+        Key::F5 => egui::Key::F5,
+        Key::F6 => egui::Key::F6,
+        Key::F7 => egui::Key::F7,
+        Key::F8 => egui::Key::F8,
+        Key::F9 => egui::Key::F9,
+        Key::F10 => egui::Key::F10,
+        Key::F11 => egui::Key::F11,
+        Key::F12 => egui::Key::F12,
+        Key::F13 => egui::Key::F13,
+        Key::F14 => egui::Key::F14,
+        Key::F15 => egui::Key::F15,
+        Key::F16 => egui::Key::F16,
+        Key::F17 => egui::Key::F17,
+        Key::F18 => egui::Key::F18,
+        Key::F19 => egui::Key::F19,
+        Key::F20 => egui::Key::F20,
+
+        _ => return None,
+    };
+    Some(key)
+}
+
+/// Matches the implementation of <https://github.com/emilk/egui/blob/68b3ef7f6badfe893d3bbb1f791b481069d807d9/crates/egui-winit/src/lib.rs#L1080>.
+pub fn bevy_to_egui_physical_key(key: &KeyCode) -> Option<egui::Key> {
+    let key = match key {
+        KeyCode::ArrowDown => egui::Key::ArrowDown,
+        KeyCode::ArrowLeft => egui::Key::ArrowLeft,
+        KeyCode::ArrowRight => egui::Key::ArrowRight,
+        KeyCode::ArrowUp => egui::Key::ArrowUp,
+
         KeyCode::Escape => egui::Key::Escape,
         KeyCode::Tab => egui::Key::Tab,
-        KeyCode::Back => egui::Key::Backspace,
-        KeyCode::Return => egui::Key::Enter,
-        KeyCode::NumpadEnter => egui::Key::Enter,
-        KeyCode::Space => egui::Key::Space,
+        KeyCode::Backspace => egui::Key::Backspace,
+        KeyCode::Enter | KeyCode::NumpadEnter => egui::Key::Enter,
+
         KeyCode::Insert => egui::Key::Insert,
         KeyCode::Delete => egui::Key::Delete,
         KeyCode::Home => egui::Key::Home,
         KeyCode::End => egui::Key::End,
         KeyCode::PageUp => egui::Key::PageUp,
         KeyCode::PageDown => egui::Key::PageDown,
-        KeyCode::Numpad0 | KeyCode::Key0 => egui::Key::Num0,
-        KeyCode::Numpad1 | KeyCode::Key1 => egui::Key::Num1,
-        KeyCode::Numpad2 | KeyCode::Key2 => egui::Key::Num2,
-        KeyCode::Numpad3 | KeyCode::Key3 => egui::Key::Num3,
-        KeyCode::Numpad4 | KeyCode::Key4 => egui::Key::Num4,
-        KeyCode::Numpad5 | KeyCode::Key5 => egui::Key::Num5,
-        KeyCode::Numpad6 | KeyCode::Key6 => egui::Key::Num6,
-        KeyCode::Numpad7 | KeyCode::Key7 => egui::Key::Num7,
-        KeyCode::Numpad8 | KeyCode::Key8 => egui::Key::Num8,
-        KeyCode::Numpad9 | KeyCode::Key9 => egui::Key::Num9,
-        KeyCode::A => egui::Key::A,
-        KeyCode::B => egui::Key::B,
-        KeyCode::C => egui::Key::C,
-        KeyCode::D => egui::Key::D,
-        KeyCode::E => egui::Key::E,
-        KeyCode::F => egui::Key::F,
-        KeyCode::G => egui::Key::G,
-        KeyCode::H => egui::Key::H,
-        KeyCode::I => egui::Key::I,
-        KeyCode::J => egui::Key::J,
-        KeyCode::K => egui::Key::K,
-        KeyCode::L => egui::Key::L,
-        KeyCode::M => egui::Key::M,
-        KeyCode::N => egui::Key::N,
-        KeyCode::O => egui::Key::O,
-        KeyCode::P => egui::Key::P,
-        KeyCode::Q => egui::Key::Q,
-        KeyCode::R => egui::Key::R,
-        KeyCode::S => egui::Key::S,
-        KeyCode::T => egui::Key::T,
-        KeyCode::U => egui::Key::U,
-        KeyCode::V => egui::Key::V,
-        KeyCode::W => egui::Key::W,
-        KeyCode::X => egui::Key::X,
-        KeyCode::Y => egui::Key::Y,
-        KeyCode::Z => egui::Key::Z,
+
+        // Punctuation
+        KeyCode::Space => egui::Key::Space,
+        KeyCode::Comma => egui::Key::Comma,
+        KeyCode::Period => egui::Key::Period,
+        // KeyCode::Colon => egui::Key::Colon, // NOTE: there is no physical colon key on an american keyboard
+        KeyCode::Semicolon => egui::Key::Semicolon,
+        KeyCode::Backslash => egui::Key::Backslash,
+        KeyCode::Slash | KeyCode::NumpadDivide => egui::Key::Slash,
+        KeyCode::BracketLeft => egui::Key::OpenBracket,
+        KeyCode::BracketRight => egui::Key::CloseBracket,
+        KeyCode::Backquote => egui::Key::Backtick,
+
+        KeyCode::Cut => egui::Key::Cut,
+        KeyCode::Copy => egui::Key::Copy,
+        KeyCode::Paste => egui::Key::Paste,
+        KeyCode::Minus | KeyCode::NumpadSubtract => egui::Key::Minus,
+        KeyCode::NumpadAdd => egui::Key::Plus,
+        KeyCode::Equal => egui::Key::Equals,
+
+        KeyCode::Digit0 | KeyCode::Numpad0 => egui::Key::Num0,
+        KeyCode::Digit1 | KeyCode::Numpad1 => egui::Key::Num1,
+        KeyCode::Digit2 | KeyCode::Numpad2 => egui::Key::Num2,
+        KeyCode::Digit3 | KeyCode::Numpad3 => egui::Key::Num3,
+        KeyCode::Digit4 | KeyCode::Numpad4 => egui::Key::Num4,
+        KeyCode::Digit5 | KeyCode::Numpad5 => egui::Key::Num5,
+        KeyCode::Digit6 | KeyCode::Numpad6 => egui::Key::Num6,
+        KeyCode::Digit7 | KeyCode::Numpad7 => egui::Key::Num7,
+        KeyCode::Digit8 | KeyCode::Numpad8 => egui::Key::Num8,
+        KeyCode::Digit9 | KeyCode::Numpad9 => egui::Key::Num9,
+
+        KeyCode::KeyA => egui::Key::A,
+        KeyCode::KeyB => egui::Key::B,
+        KeyCode::KeyC => egui::Key::C,
+        KeyCode::KeyD => egui::Key::D,
+        KeyCode::KeyE => egui::Key::E,
+        KeyCode::KeyF => egui::Key::F,
+        KeyCode::KeyG => egui::Key::G,
+        KeyCode::KeyH => egui::Key::H,
+        KeyCode::KeyI => egui::Key::I,
+        KeyCode::KeyJ => egui::Key::J,
+        KeyCode::KeyK => egui::Key::K,
+        KeyCode::KeyL => egui::Key::L,
+        KeyCode::KeyM => egui::Key::M,
+        KeyCode::KeyN => egui::Key::N,
+        KeyCode::KeyO => egui::Key::O,
+        KeyCode::KeyP => egui::Key::P,
+        KeyCode::KeyQ => egui::Key::Q,
+        KeyCode::KeyR => egui::Key::R,
+        KeyCode::KeyS => egui::Key::S,
+        KeyCode::KeyT => egui::Key::T,
+        KeyCode::KeyU => egui::Key::U,
+        KeyCode::KeyV => egui::Key::V,
+        KeyCode::KeyW => egui::Key::W,
+        KeyCode::KeyX => egui::Key::X,
+        KeyCode::KeyY => egui::Key::Y,
+        KeyCode::KeyZ => egui::Key::Z,
+
+        KeyCode::F1 => egui::Key::F1,
+        KeyCode::F2 => egui::Key::F2,
+        KeyCode::F3 => egui::Key::F3,
+        KeyCode::F4 => egui::Key::F4,
+        KeyCode::F5 => egui::Key::F5,
+        KeyCode::F6 => egui::Key::F6,
+        KeyCode::F7 => egui::Key::F7,
+        KeyCode::F8 => egui::Key::F8,
+        KeyCode::F9 => egui::Key::F9,
+        KeyCode::F10 => egui::Key::F10,
+        KeyCode::F11 => egui::Key::F11,
+        KeyCode::F12 => egui::Key::F12,
+        KeyCode::F13 => egui::Key::F13,
+        KeyCode::F14 => egui::Key::F14,
+        KeyCode::F15 => egui::Key::F15,
+        KeyCode::F16 => egui::Key::F16,
+        KeyCode::F17 => egui::Key::F17,
+        KeyCode::F18 => egui::Key::F18,
+        KeyCode::F19 => egui::Key::F19,
+        KeyCode::F20 => egui::Key::F20,
         _ => return None,
     };
     Some(key)

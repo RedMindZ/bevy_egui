@@ -55,7 +55,7 @@ fn configure_ui_state_system(mut ui_state: ResMut<UiState>) {
 }
 
 fn update_ui_scale_factor_system(
-    keyboard_input: Res<Input<KeyCode>>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
     mut toggle_scale_factor: Local<Option<bool>>,
     mut egui_settings: ResMut<EguiSettings>,
     windows: Query<&Window, With<PrimaryWindow>>,
@@ -174,7 +174,7 @@ fn ui_example_system(
         ui.separator();
 
         ui.heading("Central Panel");
-        ui.label("The central panel the region left after adding TopPanel's and SidePanel's");
+        ui.label("The central panel is the region left after adding TopPanels and SidePanels.");
         ui.label("It is often a great place for big things, like drawings:");
 
         ui.heading("Draw with your mouse to paint:");
