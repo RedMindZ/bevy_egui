@@ -375,6 +375,21 @@ impl<'w, 's> EguiContexts<'w, 's> {
         ctx.into_inner().get_mut()
     }
 
+    /// Fallible variant of [`EguiContexts::ctx_mut`].
+    #[must_use]
+    #[track_caller]
+    pub fn try_ctx_mut(&mut self) -> Option<&mut egui::Context> {
+        self.q
+            .iter_mut()
+            .find_map(|(_window_entity, ctx, primary_window)| {
+                if primary_window.is_some() {
+                    Some(ctx.into_inner().get_mut())
+                } else {
+                    None
+                }
+            })
+    }
+
     /// Egui context for a specific window.
     #[must_use]
     pub fn ctx_for_window_mut(&mut self, window: Entity) -> &mut egui::Context {
