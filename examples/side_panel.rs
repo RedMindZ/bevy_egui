@@ -1,5 +1,5 @@
-use bevy::{prelude::*, render::camera::Projection, window::PrimaryWindow};
-use bevy_egui::{egui, EguiContexts, EguiPlugin};
+use bevy::{prelude::*, window::PrimaryWindow};
+use bevy_egui::{EguiContexts, EguiPlugin};
 
 #[derive(Default, Resource)]
 struct OccupiedScreenSpace {
@@ -76,12 +76,12 @@ fn setup_system(
 ) {
     commands.spawn(PbrBundle {
         mesh: meshes.add(Plane3d::default().mesh().size(5.0, 5.0)),
-        material: materials.add(Color::rgb(0.3, 0.5, 0.3)),
+        material: materials.add(Color::srgb(0.3, 0.5, 0.3)),
         ..Default::default()
     });
     commands.spawn(PbrBundle {
         mesh: meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
-        material: materials.add(Color::rgb(0.8, 0.7, 0.6)),
+        material: materials.add(Color::srgb(0.8, 0.7, 0.6)),
         transform: Transform::from_xyz(0.0, 0.5, 0.0),
         ..Default::default()
     });

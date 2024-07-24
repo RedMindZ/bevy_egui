@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.28.0] - 6-Jul-2024
+
+### Changed
+
+- Update Bevy to 0.14 ([#284](https://github.com/mvlabat/bevy_egui/pull/284) by @Friz64).
+- Update Egui to 0.28 ([#290](https://github.com/mvlabat/bevy_egui/pull/290) by @Swoorup).
+- Update webbrowser to 1.0.1
+
+## [0.27.1] - 2-Jun-2024
+
+### Changed
+
+- Request Redraw only if really needed ([#278](https://github.com/mvlabat/bevy_egui/pull/278) by @Maximetinu).
+- Fix light in the `render_to_image_wideget` example ([#282](https://github.com/mvlabat/bevy_egui/pull/282) by @rlidwka).
+
+## [0.27.0] - 18-Apr-2024
+
+### Added
+
+- Fallible variants of primary window getters for `EguiContexts`.
+
+### Changed
+
+- Update Egui to 0.27 ([#271](https://github.com/mvlabat/bevy_egui/pull/271) by @jakobhellermann).
+- Improve compilation errors when missing `web_sys_unstable_apis` ([#270](https://github.com/mvlabat/bevy_egui/pull/270) by @Vrixyz).
+
+### Fixed
+
+- Rework reading window ids for events (fixes edge-cases with ignoring events, [#273](https://github.com/mvlabat/bevy_egui/pull/273)).
+
+### Removed
+
+- Unused `RenderGraphConfig`.
+
+## [0.26.0] - 18-Mar-2024
+
+### Added
+
+- Add web clipboard support ([#267](https://github.com/mvlabat/bevy_egui/pull/267), [#178](https://github.com/mvlabat/bevy_egui/pull/178) by @Vrixyz).
+
+### Fixed
+
+- Respect `egui::TextureOptions` for managed textures ([#264](https://github.com/mvlabat/bevy_egui/pull/264) by @TheRawMeatball).
+- Fix keybind modifiers ([#265](https://github.com/mvlabat/bevy_egui/pull/265) by @eero-lehtinen).
+
 ## [0.25.0] - 19-Feb-2024
 
 ### Added
