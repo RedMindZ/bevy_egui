@@ -17,6 +17,7 @@ use bevy::{
     prelude::{Entity, EventReader, Query, Resource, Time},
     time::Real,
     window::{CursorMoved, RequestRedraw},
+    winit::{EventLoopProxyResource, WakeUp},
 };
 use std::marker::PhantomData;
 
@@ -472,7 +473,7 @@ pub fn process_output_system(
     mut contexts: Query<EguiContextQuery>,
     #[cfg(all(feature = "manage_clipboard", not(target_os = "android")))]
     mut egui_clipboard: bevy::ecs::system::ResMut<crate::EguiClipboard>,
-    mut event: EventWriter<RequestRedraw>,
+    event_loop_proxy: Res<EventLoopProxyResource<WakeUp>>,
     #[cfg(windows)] mut last_cursor_icon: Local<bevy::utils::HashMap<Entity, egui::CursorIcon>>,
 ) {
     let mut should_request_redraw = false;
@@ -543,7 +544,7 @@ pub fn process_output_system(
     }
 
     if should_request_redraw {
-        event.send(RequestRedraw);
+        event_loop_proxy.send_event(WakeUp).ok();
     }
 }
 
