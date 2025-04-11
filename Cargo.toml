@@ -33,6 +33,7 @@ render = [
     "egui/bytemuck",
     "wgpu-types",
 ]
+statically-linked-dxc = ["bevy_render/statically-linked-dxc"]
 picking = ["bevy_picking"]
 serde = ["egui/serde"]
 # The enabled logs will print with the info log level, to make it less cumbersome to debug in browsers.
@@ -73,7 +74,7 @@ name = "render_egui_to_image"
 required-features = ["picking", "render", "bevy/bevy_gizmos"]
 
 [dependencies]
-egui = { path = "../egui/crates/egui", default-features = false }
+egui = { version = "0.31", default-features = false }
 bevy_a11y = { path = "../bevy/crates/bevy_a11y", optional = true }
 bevy_app = { path = "../bevy/crates/bevy_app" }
 bevy_derive = { path = "../bevy/crates/bevy_derive" }
@@ -109,9 +110,9 @@ thread_local = { version = "1.1.0", optional = true }
 [dev-dependencies]
 version-sync = "0.9.5"
 bevy = { path = "../bevy", default-features = false, features = [
-    "x11",
-    "png",
-    "bevy_pbr",
+    # "accesskit_unix",
+    "bevy_log",
+    "bevy_asset",
     "bevy_core_pipeline",
     "bevy_pbr",
     "bevy_mesh_picking_backend",
@@ -125,9 +126,7 @@ bevy = { path = "../bevy", default-features = false, features = [
     "webgl2",
     "x11",
 ] }
-egui = { path = "../egui/crates/egui", default-features = false, features = [
-    "bytemuck",
-] }
+egui = { version = "0.31", default-features = false, features = ["bytemuck"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 winit = "0.30"
