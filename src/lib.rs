@@ -175,7 +175,7 @@ use crate::{
 use arboard::Clipboard;
 use bevy_app::prelude::*;
 #[cfg(feature = "render")]
-use bevy_asset::{load_internal_asset, AssetEvent, Assets, Handle};
+use bevy_asset::{load_internal_asset, AssetEvent, AssetEvents, Assets, Handle};
 use bevy_derive::{Deref, DerefMut};
 use bevy_ecs::{
     prelude::*,
@@ -1187,7 +1187,11 @@ impl Plugin for EguiPlugin {
         #[cfg(feature = "render")]
         app.add_systems(
             PostUpdate,
-            update_egui_textures_system.in_set(EguiPostUpdateSet::PostProcessOutput),
+            update_egui_textures_system
+                .in_set(EguiPostUpdateSet::PostProcessOutput)
+                // We must run this system before the asset events to ensure
+                // changes to textures get picked up by the extraction step.
+                .before(AssetEvents),
         )
         .add_systems(
             Render,

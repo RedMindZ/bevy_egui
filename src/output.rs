@@ -6,12 +6,12 @@ use bevy_ecs::system::Local;
 use bevy_ecs::{
     entity::Entity,
     event::EventWriter,
-    system::{NonSend, Query},
+    system::{Query, Res},
 };
 #[cfg(windows)]
 use bevy_platform_support::collections::HashMap;
 use bevy_window::RequestRedraw;
-use bevy_winit::{cursor::CursorIcon, EventLoopProxy, WakeUp};
+use bevy_winit::{cursor::CursorIcon, EventLoopProxyWrapper, WakeUp};
 use std::{sync::Arc, time::Duration};
 
 /// Reads Egui output.
@@ -29,7 +29,7 @@ pub fn process_output_system(
     mut egui_clipboard: bevy_ecs::system::ResMut<crate::EguiClipboard>,
     mut event: EventWriter<RequestRedraw>,
     #[cfg(windows)] mut last_cursor_icon: Local<HashMap<Entity, egui::CursorIcon>>,
-    event_loop_proxy: Option<NonSend<EventLoopProxy<WakeUp>>>,
+    event_loop_proxy: Option<Res<EventLoopProxyWrapper<WakeUp>>>,
 ) {
     let mut should_request_redraw = false;
 

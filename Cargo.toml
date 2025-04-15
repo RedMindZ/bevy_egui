@@ -33,7 +33,7 @@ render = [
     "egui/bytemuck",
     "wgpu-types",
 ]
-statically-linked-dxc = ["bevy_render/statically-linked-dxc"]
+statically-linked-dxc = ["bevy_render?/statically-linked-dxc"]
 picking = ["bevy_picking"]
 serde = ["egui/serde"]
 # The enabled logs will print with the info log level, to make it less cumbersome to debug in browsers.
