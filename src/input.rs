@@ -506,41 +506,45 @@ pub fn write_ime_events_system(
             continue;
         }
 
-        let ime_event_enable =
-            |ime_state: &mut EguiContextImeState,
-             egui_input_event_writer: &mut EventWriter<EguiInputEvent>| {
-                if !ime_state.has_sent_ime_enabled {
-                    egui_input_event_writer.write(EguiInputEvent {
-                        context,
-                        event: egui::Event::Ime(egui::ImeEvent::Enabled),
-                    });
-                    ime_state.has_sent_ime_enabled = true;
-                }
-            };
+        fn ime_event_enable(
+            context: Entity,
+            ime_state: &mut EguiContextImeState,
+            egui_input_event_writer: &mut EventWriter<EguiInputEvent>,
+        ) {
+            if !ime_state.has_sent_ime_enabled {
+                egui_input_event_writer.write(EguiInputEvent {
+                    context,
+                    event: egui::Event::Ime(egui::ImeEvent::Enabled),
+                });
+                ime_state.has_sent_ime_enabled = true;
+            }
+        }
 
-        let ime_event_disable =
-            |ime_state: &mut EguiContextImeState,
-             egui_input_event_writer: &mut EventWriter<EguiInputEvent>| {
-                if !ime_state.has_sent_ime_enabled {
-                    egui_input_event_writer.write(EguiInputEvent {
-                        context,
-                        event: egui::Event::Ime(egui::ImeEvent::Disabled),
-                    });
-                    ime_state.has_sent_ime_enabled = false;
-                }
-            };
+        fn ime_event_disable(
+            context: Entity,
+            ime_state: &mut EguiContextImeState,
+            egui_input_event_writer: &mut EventWriter<EguiInputEvent>,
+        ) {
+            if ime_state.has_sent_ime_enabled {
+                egui_input_event_writer.write(EguiInputEvent {
+                    context,
+                    event: egui::Event::Ime(egui::ImeEvent::Disabled),
+                });
+                ime_state.has_sent_ime_enabled = false;
+            }
+        }
 
         // Aligned with the egui-winit implementation: https://github.com/emilk/egui/blob/0f2b427ff4c0a8c68f6622ec7d0afb7ba7e71bba/crates/egui-winit/src/lib.rs#L348
         match event {
             Ime::Enabled { window: _ } => {
-                ime_event_enable(&mut ime_state, &mut egui_input_event_writer);
+                ime_event_enable(context, &mut ime_state, &mut egui_input_event_writer);
             }
             Ime::Preedit {
                 value,
                 window: _,
                 cursor: _,
             } => {
-                ime_event_enable(&mut ime_state, &mut egui_input_event_writer);
+                ime_event_enable(context, &mut ime_state, &mut egui_input_event_writer);
                 egui_input_event_writer.write(EguiInputEvent {
                     context,
                     event: egui::Event::Ime(egui::ImeEvent::Preedit(value.clone())),
@@ -551,10 +555,10 @@ pub fn write_ime_events_system(
                     context,
                     event: egui::Event::Ime(egui::ImeEvent::Commit(value.clone())),
                 });
-                ime_event_disable(&mut ime_state, &mut egui_input_event_writer);
+                ime_event_disable(context, &mut ime_state, &mut egui_input_event_writer);
             }
             Ime::Disabled { window: _ } => {
-                ime_event_disable(&mut ime_state, &mut egui_input_event_writer);
+                ime_event_disable(context, &mut ime_state, &mut egui_input_event_writer);
             }
         }
     }

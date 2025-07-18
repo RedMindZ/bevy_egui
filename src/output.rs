@@ -10,7 +10,7 @@ use bevy_ecs::{
 };
 #[cfg(windows)]
 use bevy_platform::collections::HashMap;
-use bevy_window::RequestRedraw;
+use bevy_window::{RequestRedraw, Window};
 use bevy_winit::{cursor::CursorIcon, EventLoopProxyWrapper, WakeUp};
 use std::{sync::Arc, time::Duration};
 
@@ -23,6 +23,7 @@ pub fn process_output_system(
         &mut EguiRenderOutput,
         &mut EguiOutput,
         Option<&mut CursorIcon>,
+        Option<&mut Window>,
         &EguiContextSettings,
     )>,
     #[cfg(all(feature = "manage_clipboard", not(target_os = "android")))]
@@ -40,6 +41,7 @@ pub fn process_output_system(
         mut render_output,
         mut egui_output,
         cursor_icon,
+        window,
         _settings,
     ) in contexts.iter_mut()
     {
@@ -116,6 +118,19 @@ pub fn process_output_system(
             }
             #[cfg(not(windows))]
             set_icon();
+        }
+
+        if let Some(mut window) = window {
+            if let Some(ime) = &egui_output.platform_output.ime {
+                let rect = ctx.zoom_factor() * ime.rect;
+                let rect = bevy_math::Rect::new(rect.min.x, rect.min.y, rect.max.x, rect.max.y);
+
+                window.ime_enabled = true;
+                window.ime_area = Some(rect);
+            } else {
+                window.ime_enabled = false;
+                window.ime_area = None;
+            }
         }
 
         let needs_repaint = !render_output.is_empty();
